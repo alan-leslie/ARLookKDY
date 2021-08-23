@@ -39,7 +39,7 @@ class PlacesViewModel (private val repository: PlacesRepository) : ViewModel() {
                 val results = PlacesApi.retrofitService.nearbyPlaces(
                     apiKey = apiKey,
                     location = "${location.latitude},${location.longitude}",
-                    radiusInMeters = 1000,
+                    radiusInMeters = 500,
                     placeType = "bar").results
                 _places.value = results
                 _status.value = "   First Place : ${_places.value!![0].name}"
@@ -47,6 +47,24 @@ class PlacesViewModel (private val repository: PlacesRepository) : ViewModel() {
                 _status.value = "Failure: ${e.message}, ${e.stackTraceToString()}"
             }
         }
+    }
+
+    /**
+     * Gets places at NESW from the location
+     * [Place] [List] [LiveData].
+     */
+    fun getFixedPlaces(location: Location) {
+        val northSouth = .045
+        val eastWest = .055
+        val north5 = Place(place_id="north5", icon="https://maps.gstatic.com/mapfiles/place_api/icons/v1/png_71/park-71.png", name="north5", geometry= Geometry(location= GeometryLocation(location.latitude + northSouth, location.longitude)))
+        val south5 = Place(place_id="south5", icon="https://maps.gstatic.com/mapfiles/place_api/icons/v1/png_71/park-71.png", name="south5", geometry= Geometry(location= GeometryLocation(location.latitude - northSouth, location.longitude)))
+        val east5 = Place(place_id="east5", icon="https://maps.gstatic.com/mapfiles/place_api/icons/v1/png_71/park-71.png", name="east5", geometry= Geometry(location= GeometryLocation(location.latitude, location.longitude + eastWest)))
+        val west5 = Place(place_id="west5", icon="https://maps.gstatic.com/mapfiles/place_api/icons/v1/png_71/park-71.png", name="west5", geometry= Geometry(location= GeometryLocation(location.latitude, location.longitude - eastWest)))
+        val ct = Place(place_id="chapel tavern", icon="https://maps.gstatic.com/mapfiles/place_api/icons/v1/png_71/park-71.png", name="chapel tavern", geometry= Geometry(location= GeometryLocation(56.13023958, -3.2023989)))
+        val wc = Place(place_id="Woodland", icon="https://maps.gstatic.com/mapfiles/place_api/icons/v1/png_71/park-71.png", name="Woodland Creatures", geometry= Geometry(location= GeometryLocation(55.9661769, -3.1758515)))
+        val fixedPlaces: List<Place> = listOf(wc, north5, south5, east5, west5)
+        _places.value = fixedPlaces
+        _status.value = "   First Place : ${_places.value!![0].name}"
     }
 
     /**

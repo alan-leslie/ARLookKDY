@@ -1,4 +1,3 @@
-// Copyright 2020 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -71,21 +70,21 @@ private fun calcRadius(pathLength: Float): Float
 {
     if(pathLength <= 100.0f)
     {
-        return 5.0f
+        return 4.0f
     }
     else
     {
         if(pathLength <= 500.0f)
         {
             val diff = pathLength  - 100.0f
-            return 5.0f + diff / 200.0f
+            return 4.0f + diff / 200.0f
         }
         else
         {
-            if (pathLength < 3500)
+            if (pathLength < 4500)
             {
                 val diff = pathLength - 500.0f
-                return 7.0f + diff/ 1000.0f
+                return 6.0f + diff/ 1000.0f
             }
             else
             {
