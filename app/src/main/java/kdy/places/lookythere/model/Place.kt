@@ -55,10 +55,10 @@ fun Place.getPathLength(latLng: LatLng): Float {
 fun Place.getPositionVector(azimuth: Float, latLng: LatLng): Vector3 {
     val placeLatLng = this.geometry.location.latLng
     val heading = latLng.sphericalHeading(placeLatLng)
-    val heading2rad =  heading * Math.PI / 180.0
+    val heading2rad =  Math.toRadians(heading)
     val pathLength = getPathLength(latLng)
     val relativeAngleRad = (azimuth * -1.0).toDouble() + heading2rad
-    val relativeAngleDeg = relativeAngleRad * 180.0 / Math.PI
+    val relativeAngleDeg = Math.toDegrees(relativeAngleRad)
     val radius = calcRadius(pathLength)
     val x = radius * sin((azimuth * -1.0).toDouble() + heading2rad).toFloat()
     val y = 0.1f

@@ -1,6 +1,7 @@
 package kdy.places.lookythere.viewmodel
 
 import android.location.Location
+import android.widget.Toast
 import androidx.lifecycle.*
 import kdy.places.lookythere.api.PlacesApi
 import kdy.places.lookythere.model.Place
@@ -42,7 +43,14 @@ class PlacesViewModel (private val repository: PlacesRepository) : ViewModel() {
                     radiusInMeters = 500,
                     placeType = "bar").results
                 _places.value = results
-                _status.value = "   First Place : ${_places.value!![0].name}"
+
+                if(results.size > 0) {
+                    _status.value = "   First Place : ${_places.value!![0].name}"
+                }
+                else
+                {
+                    _status.value = "  No places found"
+                }
             } catch (e: Exception) {
                 _status.value = "Failure: ${e.message}, ${e.stackTraceToString()}"
             }
@@ -62,7 +70,7 @@ class PlacesViewModel (private val repository: PlacesRepository) : ViewModel() {
         val west5 = Place(place_id="west5", icon="https://maps.gstatic.com/mapfiles/place_api/icons/v1/png_71/park-71.png", name="west5", geometry= Geometry(location= GeometryLocation(location.latitude, location.longitude - eastWest)))
         val ct = Place(place_id="chapel tavern", icon="https://maps.gstatic.com/mapfiles/place_api/icons/v1/png_71/park-71.png", name="chapel tavern", geometry= Geometry(location= GeometryLocation(56.13023958, -3.2023989)))
         val wc = Place(place_id="Woodland", icon="https://maps.gstatic.com/mapfiles/place_api/icons/v1/png_71/park-71.png", name="Woodland Creatures", geometry= Geometry(location= GeometryLocation(55.9661769, -3.1758515)))
-        val fixedPlaces: List<Place> = listOf(wc, north5, south5, east5, west5)
+        val fixedPlaces: List<Place> = listOf(ct, wc, north5, south5, east5, west5)
         _places.value = fixedPlaces
         _status.value = "   First Place : ${_places.value!![0].name}"
     }

@@ -1,10 +1,12 @@
 package kdy.places.lookythere
 
 import android.view.View
+import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.databinding.BindingAdapter
 
-@BindingAdapter("app:currentAzimuth")
-fun angleAndDirection(view: TextView, number: Int) {
-    view.text = "Current azimuth is <$number>"
+
+@BindingAdapter("current", "original", "adjustment")
+fun azimuthText(view: TextView, current: Int, original: Int, adjustment : Int) {
+    view.text = "Azimuth <$original($adjustment)>/<$current>"
 }
