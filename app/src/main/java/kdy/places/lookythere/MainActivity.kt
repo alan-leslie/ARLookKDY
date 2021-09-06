@@ -14,6 +14,7 @@ package kdy.places.lookythere
 
 import android.Manifest
 import android.app.ActivityManager
+import android.app.AlertDialog
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Color
@@ -22,21 +23,24 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.location.Location
+import android.os.Build
 import android.os.Bundle
+import android.os.Looper
 import android.service.autofill.TextValueSanitizer
 import android.util.Log
+import android.view.View
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
 import androidx.databinding.DataBindingUtil
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
-import com.google.android.gms.location.FusedLocationProviderClient
-import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.*
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.SupportMapFragment
@@ -68,6 +72,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var azimuthText: TextView
     private lateinit var directionText: TextView
     private var currentAzimuth: Int = 0
+    private var azimuthIncrement: Int = 1
+    private var originalAzimuth: Float = -1.0f
+    private var originalAz2deg: MutableLiveData<Int> = MutableLiveData(0)
+    private var azimuthAdjustment: MutableLiveData<Int> = MutableLiveData(0)
 
     private var _angle: MutableLiveData<Int> = MutableLiveData(0)
     val angle : LiveData<Int> = _angle
@@ -83,6 +91,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private val rotationMatrix = FloatArray(9)
     private val orientationAngles = FloatArray(3)
 
+//    private var fusedLocationProvider: FusedLocationProviderClient? = null
     private var anchor: Anchor? = null
     private var anchorNode: AnchorNode? = null
     private var markers: MutableList<Marker> = emptyList<Marker>().toMutableList()
@@ -104,9 +113,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             DataBindingUtil.setContentView(this, R.layout.activity_main)
 
         binding.angle = angle
+        binding.originalAz2deg = originalAz2deg
+        binding.azimuthAdjustment = azimuthAdjustment
+
         binding.lifecycleOwner = this  // use Fragment.viewLifecycleOwner for fragments
 
-        azimuthText = findViewById(R.id.azimuth)
+//        azimuthText = findViewById(R.id.azimuth)
 //        directionText = findViewById(R.id.direction)
 
 
@@ -126,13 +138,20 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             Toast.makeText(this, "OnCreate: cannot get SensorManager", Toast.LENGTH_LONG)
             .show()
         }
-//        sensorManager = getSystemService()!!
 
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+
+        checkCameraPermission()
+        checkLocationPermission()
 
         setUpAr()
         setUpMaps()
     }
+
+//    private val barIcon: BitmapDescriptor by lazy {
+//        val color = ContextCompat.getColor(this.requireContext(), R.color.colorPrimary)
+//        BitmapHelper.vectorToBitmap(this.requireContext(), R.drawable.ic_baseline_local_bar_24, color)
+//    }
 
     private fun getBounds(currentLocation: Location, places :List<Place>) : LatLngBounds.Builder
     {
@@ -173,14 +192,16 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             sensorManager.registerListener(
                 this,
                 it,
-                SensorManager.SENSOR_DELAY_NORMAL
+                SensorManager.SENSOR_DELAY_NORMAL,
+                SensorManager.SENSOR_DELAY_UI
             )
         }
         sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.also {
             sensorManager.registerListener(
                 this,
                 it,
-                SensorManager.SENSOR_DELAY_NORMAL
+                SensorManager.SENSOR_DELAY_NORMAL,
+                SensorManager.SENSOR_DELAY_UI
             )
         }
     }
@@ -198,11 +219,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 val newp1 = anchor1.pose
                 val rot = newp1.rotationQuaternion[3]
                 val azimuth = orientationAngles[0]
-                val az2deg = (azimuth * (180.0/Math.PI)).toFloat()
+                val az2deg = Math.toDegrees(azimuth.toDouble())
 
                 val session: Session? = arFragment.arSceneView.session
                 val pos = floatArrayOf(0f, 0f, 0f)
-                val rotation = floatArrayOf(0f, 1.00f, 0f, az2deg)
+                val rotation = floatArrayOf(0f, 1.00f, 0f, az2deg.toFloat())
                 val anchor: Anchor = session!!.createAnchor(Pose(pos, rotation))
                 val anchorLocalPosition = anchor.pose
                 val anchorLocalRotation = newp1.rotationQuaternion.component4()
@@ -214,6 +235,33 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 addPlaces(anchorNode!!)
             }
         }
+    }
+
+    private fun movePlaces(anchorNode: AnchorNode, adjustment: Int) {
+        val adjustmentAsRadians = Math.toRadians(adjustment.toDouble())
+        for (child in anchorNode.children) {
+            if(child is PlaceNode)
+            {
+                val thePlaceNode = child as PlaceNode
+                thePlaceNode.place.let {
+                    currentLocation.let {
+                        val localPosition =
+                            thePlaceNode.place!!.getPositionVector(originalAzimuth + adjustmentAsRadians.toFloat(), currentLocation!!.latLng)
+                        thePlaceNode.localPosition = localPosition
+                    }
+                }
+            }
+        }
+    }
+
+    private fun movePlacesPlus(anchorNode: AnchorNode) {
+        azimuthAdjustment.value = azimuthAdjustment.value!! + azimuthIncrement
+        movePlaces(anchorNode, azimuthAdjustment.value!!)
+    }
+
+    private fun movePlacesMinus(anchorNode: AnchorNode) {
+        azimuthAdjustment.value = azimuthAdjustment.value!! - azimuthIncrement
+        movePlaces(anchorNode, azimuthAdjustment.value!!)
     }
 
     private fun addPlaces(anchorNode: AnchorNode) {
@@ -241,11 +289,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             Vector3(size / 2.0f, size / 2.0f, size / 2.0f),
             material)
 
-        val azimuth = orientationAngles[0]
-        val az2deg = angle.value
-        Log.d(_TAG, "addPlaces: azimuth is <$azimuth>, <$az2deg>")
+        originalAzimuth = orientationAngles[0]
+        originalAz2deg.value = (Math.round(((Math.toDegrees(originalAzimuth.toDouble()) + 360.0) % 360.0).toDouble())).toInt()
+        val az2deg = originalAz2deg.value
+        Log.d(_TAG, "addPlaces: azimuth is <$originalAzimuth>, <$az2deg>")
 
-        azimuthText.text = "Original azimuth is <$az2deg>"
+//        azimuthText.text = "Original azimuth is <$originalAz2deg>"
 
 
         for (place in places) {
@@ -260,9 +309,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 val heading =
                     currentLocation.latLng.sphericalHeading(place.geometry.location.latLng)
                 val placeName = place.name
-                val heading2rad = heading * Math.PI / 180.0
-                val relativeAngleRad = (azimuth * -1.0).toDouble() + heading2rad
-                val relativeAngleDeg = relativeAngleRad * 180.0 / Math.PI
+                val heading2rad = Math.toRadians(heading)
+                val relativeAngleRad = (originalAzimuth * -1.0).toDouble() + heading2rad
+                val relativeAngleDeg = Math.toDegrees(relativeAngleRad)
 
                 Log.d(_TAG, "addPlaces: heading is <$heading>, place is <$placeName>")
                 Log.d(
@@ -270,7 +319,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     "relativeAngleRad is <$relativeAngleRad>, relativeAngleDeg is <$relativeAngleDeg>"
                 )
 
-                val localPosition = place.getPositionVector(azimuth, currentLocation.latLng)
+                val localPosition = place.getPositionVector(originalAzimuth, currentLocation.latLng)
                 if (placeName == "home") {
                     placeNode.localPosition = Vector3(0.0f, 0.0f, 0.0f)
                 } else {
@@ -328,40 +377,29 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     }
 
     private fun setUpMaps() {
-        mapFragment.getMapAsync { googleMap ->
-            if (ActivityCompat.checkSelfPermission(
-                    this,
-                    Manifest.permission.ACCESS_FINE_LOCATION
-                ) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
-                    this,
-                    Manifest.permission.ACCESS_COARSE_LOCATION
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                // TODO: Consider calling
-                //    ActivityCompat#requestPermissions
-                // here to request the missing permissions, and then overriding
-                //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-                //                                          int[] grantResults)
-                // to handle the case where the user grants the permission. See the documentation
-                // for ActivityCompat#requestPermissions for more details.
-//                return
-            }
-            googleMap.isMyLocationEnabled = true
+        if (ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED)
+        {
+            mapFragment.getMapAsync { googleMap ->
+                googleMap.isMyLocationEnabled = true
 
-            getCurrentLocation {
-                val pos = CameraPosition.fromLatLngZoom(it.latLng, 10f)
-                googleMap.moveCamera(CameraUpdateFactory.newCameraPosition(pos))
-                getNearbyPlaces(it)
-            }
-            googleMap.setOnMarkerClickListener { marker ->
-                val tag = marker.tag
-                if (tag !is Place) {
-                    return@setOnMarkerClickListener false
+                getCurrentLocation {
+                    val pos = CameraPosition.fromLatLngZoom(it.latLng, 10f)
+                    googleMap.moveCamera(CameraUpdateFactory.newCameraPosition(pos))
+                    getNearbyPlaces(it)
                 }
-                showInfoWindow(tag)
-                return@setOnMarkerClickListener true
+                googleMap.setOnMarkerClickListener { marker ->
+                    val tag = marker.tag
+                    if (tag !is Place) {
+                        return@setOnMarkerClickListener false
+                    }
+                    showInfoWindow(tag)
+                    return@setOnMarkerClickListener true
+                }
+                map = googleMap
             }
-            map = googleMap
         }
     }
 
@@ -369,33 +407,37 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         if (ActivityCompat.checkSelfPermission(
                 this,
                 Manifest.permission.ACCESS_FINE_LOCATION
-            ) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
-                this,
-                Manifest.permission.ACCESS_COARSE_LOCATION
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            // TODO: Consider calling
-            //    ActivityCompat#requestPermissions
-            // here to request the missing permissions, and then overriding
-            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-            //                                          int[] grantResults)
-            // to handle the case where the user grants the permission. See the documentation
-            // for ActivityCompat#requestPermissions for more details.
-            return
+            ) == PackageManager.PERMISSION_GRANTED)
+        {
+            fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+                currentLocation = location
+                onSuccess(location)
+            }.addOnFailureListener {
+                Log.e(_TAG, "Could not get location")
+            }
         }
-        fusedLocationClient.lastLocation.addOnSuccessListener { location ->
-            currentLocation = location
-            onSuccess(location)
-        }.addOnFailureListener {
-            Log.e(_TAG, "Could not get location")
+    }
+
+    fun onPlus(view: View)
+    {
+//        Toast.makeText(this, "onPlus triggered", Toast.LENGTH_SHORT)
+//            .show()
+        anchorNode?.let {
+            movePlacesPlus(anchorNode!!)
+        }
+    }
+
+    fun onMinus(view: View)
+    {
+//        Toast.makeText(this, "onMinus triggered", Toast.LENGTH_SHORT)
+//            .show()
+        anchorNode?.let {
+            movePlacesMinus(anchorNode!!)
         }
     }
 
     private fun getNearbyPlaces(location: Location) {
-//        placesViewModel.getNearbyPlaces(location)
-//        placesViewModel.getCardinalPointPlaces(location)
-//        placesViewModel.getFixedPlaces(location)
-        placesViewModel.getDBPlaces()
+        placesViewModel.getNearbyPlaces(location)
     }
 
     private fun isSupportedDevice(): Boolean {
@@ -443,6 +485,183 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
             _angle.value = Math.round(degrees).toInt()
         }
+    }
+
+    private fun checkCameraPermission(){
+        if (ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.CAMERA
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            // Should we show an explanation?
+            if (ActivityCompat.shouldShowRequestPermissionRationale(
+                    this,
+                    Manifest.permission.CAMERA
+                )
+            ) {
+                // Show an explanation to the user *asynchronously* -- don't block
+                // this thread waiting for the user's response! After the user
+                // sees the explanation, try again to request the permission.
+                AlertDialog.Builder(this)
+                    .setTitle("Camera Permission Needed")
+                    .setMessage("This app needs the camera permission to work with AR, please accept to use camera functionality")
+                    .setPositiveButton(
+                        "OK"
+                    ) { _, _ ->
+                        //Prompt the user once explanation has been shown
+                        requestCameraPermission()
+                    }
+                    .create()
+                    .show()
+            } else {
+                // No explanation needed, we can request the permission.
+                requestCameraPermission()
+            }
+        }
+    }
+
+    private fun requestCameraPermission() {
+        ActivityCompat.requestPermissions(
+            this, arrayOf(Manifest.permission.CAMERA),
+            MY_PERMISSIONS_REQUEST_CAMERA
+        )
+    }
+
+    private fun checkLocationPermission() {
+        if (ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            // Should we show an explanation?
+            if (ActivityCompat.shouldShowRequestPermissionRationale(
+                    this,
+                    Manifest.permission.ACCESS_FINE_LOCATION
+                )
+            ) {
+                // Show an explanation to the user *asynchronously* -- don't block
+                // this thread waiting for the user's response! After the user
+                // sees the explanation, try again to request the permission.
+                AlertDialog.Builder(this)
+                    .setTitle("Location Permission Needed")
+                    .setMessage("This app needs the Location permission, please accept to use location functionality")
+                    .setPositiveButton(
+                        "OK"
+                    ) { _, _ ->
+                        //Prompt the user once explanation has been shown
+                        requestLocationPermission()
+                    }
+                    .create()
+                    .show()
+            } else {
+                // No explanation needed, we can request the permission.
+                requestLocationPermission()
+            }
+        }
+    }
+    private fun requestLocationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_BACKGROUND_LOCATION
+                ),
+                MY_PERMISSIONS_REQUEST_LOCATION
+            )
+        } else {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
+                MY_PERMISSIONS_REQUEST_LOCATION
+            )
+        }
+    }
+
+    private val locationRequest: LocationRequest =  LocationRequest.create().apply {
+        interval = 30
+        fastestInterval = 10
+        priority = LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY
+        maxWaitTime= 60
+    }
+
+    private var locationCallback: LocationCallback = object : LocationCallback() {
+        override fun onLocationResult(locationResult: LocationResult) {
+            val locationList = locationResult.locations
+            if (locationList.isNotEmpty()) {
+                //The last location in the list is the newest
+                val location = locationList.last()
+                Toast.makeText(
+                    this@MainActivity,
+                    "Got Location: " + location.toString(),
+                    Toast.LENGTH_LONG)
+                    .show()
+            }
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        when (requestCode) {
+            MY_PERMISSIONS_REQUEST_LOCATION -> {
+                // If request is cancelled, the result arrays are empty.
+                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+
+                    // permission was granted, yay! Do the
+                    // location-related task you need to do.
+                    if (ContextCompat.checkSelfPermission(
+                            this,
+                            Manifest.permission.ACCESS_FINE_LOCATION
+                        ) == PackageManager.PERMISSION_GRANTED
+                    ) {
+                        fusedLocationClient?.requestLocationUpdates(
+                            locationRequest,
+                            locationCallback,
+                            Looper.getMainLooper()
+                        )
+                    }
+
+                } else {
+
+                    // permission denied, boo! Disable the
+                    // functionality that depends on this permission.
+                    Toast.makeText(this, "location permission denied", Toast.LENGTH_LONG).show()
+                }
+                return
+            }
+            MY_PERMISSIONS_REQUEST_CAMERA -> {
+                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+
+                    // permission was granted, yay! Do the
+                    // location-related task you need to do.
+                    if (ContextCompat.checkSelfPermission(
+                            this,
+                            Manifest.permission.ACCESS_FINE_LOCATION
+                        ) == PackageManager.PERMISSION_GRANTED
+                    ) {
+                        Toast.makeText(this, "camera permission granted", Toast.LENGTH_LONG).show()
+                    }
+                } else {
+
+                    // permission denied, boo! Disable the
+                    // functionality that depends on this permission.
+                    Toast.makeText(this, "camera permission denied", Toast.LENGTH_LONG).show()
+                }
+                return
+            }
+            else -> {
+                // Ignore all other requests.
+            }
+        }
+    }
+
+    companion object {
+        private const val MY_PERMISSIONS_REQUEST_LOCATION = 99
+        private const val MY_PERMISSIONS_REQUEST_CAMERA = 200
     }
 }
 
