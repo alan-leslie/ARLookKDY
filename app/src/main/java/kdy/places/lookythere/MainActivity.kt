@@ -18,27 +18,18 @@ import android.app.AlertDialog
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Color
-import android.hardware.Sensor
-import android.hardware.SensorEvent
-import android.hardware.SensorEventListener
-import android.hardware.SensorManager
 import android.location.Location
 import android.os.Build
 import android.os.Bundle
 import android.os.Looper
-import android.service.autofill.TextValueSanitizer
 import android.util.Log
 import android.view.View
-import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.core.content.getSystemService
 import androidx.databinding.DataBindingUtil
-import androidx.fragment.app.viewModels
-import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import com.google.android.gms.location.*
 import com.google.android.gms.maps.CameraUpdateFactory
@@ -46,7 +37,6 @@ import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.SupportMapFragment
 import com.google.android.gms.maps.model.*
 import com.google.ar.core.Anchor
-import com.google.ar.core.Frame
 import com.google.ar.core.Pose
 import com.google.ar.core.Session
 import com.google.ar.sceneform.AnchorNode
@@ -58,40 +48,26 @@ import com.google.maps.android.ktx.utils.sphericalHeading
 import kdy.places.lookythere.database.place.PlaceData
 import kdy.places.lookythere.databinding.ActivityMainBinding
 import kdy.places.lookythere.model.*
+import kdy.places.lookythere.viewmodel.OrientationSensor
 import kdy.places.lookythere.viewmodel.PlacesViewModel
 import kdy.places.lookythere.viewmodel.PlacesViewModelFactory
 import kotlin.math.abs
 import kotlin.math.max
 
-
-class MainActivity : AppCompatActivity(), SensorEventListener {
+class MainActivity : AppCompatActivity() {
+    private var compass: OrientationSensor? = null
 
     private val _TAG = "MainActivity"
     private lateinit var arFragment: PlacesArFragment
     private lateinit var mapFragment: SupportMapFragment
-    private lateinit var azimuthText: TextView
-    private lateinit var directionText: TextView
-    private var currentAzimuth: Int = 0
     private var azimuthIncrement: Int = 1
     private var originalAzimuth: Float = -1.0f
     private var originalAz2deg: MutableLiveData<Int> = MutableLiveData(0)
     private var azimuthAdjustment: MutableLiveData<Int> = MutableLiveData(0)
 
-    private var _angle: MutableLiveData<Int> = MutableLiveData(0)
-    val angle : LiveData<Int> = _angle
-
-
     // Location
     private lateinit var fusedLocationClient: FusedLocationProviderClient
 
-    // Sensor
-    private lateinit var sensorManager: SensorManager
-    private val accelerometerReading = FloatArray(3)
-    private val magnetometerReading = FloatArray(3)
-    private val rotationMatrix = FloatArray(9)
-    private val orientationAngles = FloatArray(3)
-
-//    private var fusedLocationProvider: FusedLocationProviderClient? = null
     private var anchor: Anchor? = null
     private var anchorNode: AnchorNode? = null
     private var markers: MutableList<Marker> = emptyList<Marker>().toMutableList()
@@ -108,36 +84,28 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         if (!isSupportedDevice()) {
             return
         }
-//        setContentView(R.layout.activity_main)
+
+        try {
+            compass = OrientationSensor(this)
+        } catch (e:IllegalStateException) {
+            e.printStackTrace()
+            Toast.makeText(this, "Either accelerometer or magnetic sensor not found" , Toast.LENGTH_LONG).show()
+        }
+
         val binding : ActivityMainBinding =
             DataBindingUtil.setContentView(this, R.layout.activity_main)
 
-        binding.angle = angle
         binding.originalAz2deg = originalAz2deg
         binding.azimuthAdjustment = azimuthAdjustment
+        binding.compass = compass
 
         binding.lifecycleOwner = this  // use Fragment.viewLifecycleOwner for fragments
-
-//        azimuthText = findViewById(R.id.azimuth)
-//        directionText = findViewById(R.id.direction)
-
 
         arFragment = supportFragmentManager.findFragmentById(R.id.ar_fragment) as PlacesArFragment
         mapFragment =
             supportFragmentManager.findFragmentById(R.id.maps_fragment) as SupportMapFragment
 
         initMaterials()
-
-        val service : Any? = getSystemService(SENSOR_SERVICE)
-
-        if (service != null) {
-            sensorManager = service as SensorManager
-        }
-        else
-        {
-            Toast.makeText(this, "OnCreate: cannot get SensorManager", Toast.LENGTH_LONG)
-            .show()
-        }
 
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
@@ -188,27 +156,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     override fun onResume() {
         super.onResume()
-        sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)?.also {
-            sensorManager.registerListener(
-                this,
-                it,
-                SensorManager.SENSOR_DELAY_NORMAL,
-                SensorManager.SENSOR_DELAY_UI
-            )
-        }
-        sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.also {
-            sensorManager.registerListener(
-                this,
-                it,
-                SensorManager.SENSOR_DELAY_NORMAL,
-                SensorManager.SENSOR_DELAY_UI
-            )
-        }
+        compass!!.start(this)
     }
 
     override fun onPause() {
         super.onPause()
-        sensorManager.unregisterListener(this)
+        compass!!.stop()
     }
 
     private fun setUpAr() {
@@ -218,12 +171,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 val anchor1 = hitResult.createAnchor()
                 val newp1 = anchor1.pose
                 val rot = newp1.rotationQuaternion[3]
-                val azimuth = orientationAngles[0]
-                val az2deg = Math.toDegrees(azimuth.toDouble())
+//                val azimuth = orientationAngles[0]
+                val az2deg = compass!!.azimuth.value
 
                 val session: Session? = arFragment.arSceneView.session
                 val pos = floatArrayOf(0f, 0f, 0f)
-                val rotation = floatArrayOf(0f, 1.00f, 0f, az2deg.toFloat())
+                val rotation = floatArrayOf(0f, 1.00f, 0f, az2deg!!.toFloat())
                 val anchor: Anchor = session!!.createAnchor(Pose(pos, rotation))
                 val anchorLocalPosition = anchor.pose
                 val anchorLocalRotation = newp1.rotationQuaternion.component4()
@@ -289,13 +242,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             Vector3(size / 2.0f, size / 2.0f, size / 2.0f),
             material)
 
-        originalAzimuth = orientationAngles[0]
-        originalAz2deg.value = (Math.round(((Math.toDegrees(originalAzimuth.toDouble()) + 360.0) % 360.0).toDouble())).toInt()
+        originalAz2deg.value = compass!!.azimuth.value
+        originalAzimuth = (Math.toRadians((originalAz2deg!!.value)!!.toDouble())).toFloat()
+
+        //(Math.round(((Math.toDegrees(originalAzimuth.toDouble()) + 360.0) % 360.0).toDouble())).toInt()
         val az2deg = originalAz2deg.value
         Log.d(_TAG, "addPlaces: azimuth is <$originalAzimuth>, <$az2deg>")
-
-//        azimuthText.text = "Original azimuth is <$originalAz2deg>"
-
 
         for (place in places) {
             val pathLength = place.getPathLength(currentLocation.latLng)
@@ -420,8 +372,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     fun onPlus(view: View)
     {
-//        Toast.makeText(this, "onPlus triggered", Toast.LENGTH_SHORT)
-//            .show()
         anchorNode?.let {
             movePlacesPlus(anchorNode!!)
         }
@@ -429,15 +379,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     fun onMinus(view: View)
     {
-//        Toast.makeText(this, "onMinus triggered", Toast.LENGTH_SHORT)
-//            .show()
         anchorNode?.let {
             movePlacesMinus(anchorNode!!)
         }
     }
 
     private fun getNearbyPlaces(location: Location) {
-        placesViewModel.getNearbyPlaces(location)
+        placesViewModel.getFixedPlaces(location)
     }
 
     private fun isSupportedDevice(): Boolean {
@@ -450,41 +398,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             return false
         }
         return true
-    }
-
-    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
-        val sensorName = sensor?.name
-        Log.d("onAccuracyChanged", "sensor <$sensorName> accuracy is <$accuracy>")
-    }
-
-    override fun onSensorChanged(event: SensorEvent?) {
-        if (event == null) {
-            return
-        }
-
-        if (event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
-            System.arraycopy(event.values, 0, accelerometerReading, 0, accelerometerReading.size)
-        } else if (event.sensor.type == Sensor.TYPE_MAGNETIC_FIELD) {
-            System.arraycopy(event.values, 0, magnetometerReading, 0, magnetometerReading.size)
-        }
-
-        updateOrientationAngles()
-    }
-
-    private fun updateOrientationAngles() {
-        val result = SensorManager.getRotationMatrix(
-            rotationMatrix,
-            null,
-            accelerometerReading,
-            magnetometerReading
-        )
-
-        if (result){
-            val orientation = SensorManager.getOrientation(rotationMatrix, orientationAngles)
-            val degrees : Double = ((Math.toDegrees(orientation.get(0).toDouble()) + 360.0) % 360.0).toDouble()
-
-            _angle.value = Math.round(degrees).toInt()
-        }
     }
 
     private fun checkCameraPermission(){
