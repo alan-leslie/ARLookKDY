@@ -61,8 +61,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var arFragment: PlacesArFragment
     private lateinit var mapFragment: SupportMapFragment
     private var azimuthIncrement: Int = 1
-    private var originalAzimuth: Float = -1.0f
-    private var originalAz2deg: MutableLiveData<Int> = MutableLiveData(0)
+    private var originalAzimuth: Float = -0.0f
+    private var originalAz2deg: MutableLiveData<Float> = MutableLiveData(0f)
     private var azimuthAdjustment: MutableLiveData<Int> = MutableLiveData(0)
 
     // Location
@@ -170,14 +170,15 @@ class MainActivity : AppCompatActivity() {
                 // Create anchor
                 val anchor1 = hitResult.createAnchor()
                 val newp1 = anchor1.pose
-                val rot = newp1.rotationQuaternion[3]
+                val rot = newp1.rotationQuaternion
 //                val azimuth = orientationAngles[0]
                 val az2deg = compass!!.azimuth.value
 
                 val session: Session? = arFragment.arSceneView.session
                 val pos = floatArrayOf(0f, 0f, 0f)
+//                val rotation = floatArrayOf(0f, 1.00f, 0f, az2deg!!.toFloat())
                 val rotation = floatArrayOf(0f, 1.00f, 0f, az2deg!!.toFloat())
-                val anchor: Anchor = session!!.createAnchor(Pose(pos, rotation))
+                val anchor: Anchor = session!!.createAnchor(Pose(pos, rot))
                 val anchorLocalPosition = anchor.pose
                 val anchorLocalRotation = newp1.rotationQuaternion.component4()
 
@@ -242,12 +243,9 @@ class MainActivity : AppCompatActivity() {
             Vector3(size / 2.0f, size / 2.0f, size / 2.0f),
             material)
 
-        originalAz2deg.value = compass!!.azimuth.value
-        originalAzimuth = (Math.toRadians((originalAz2deg!!.value)!!.toDouble())).toFloat()
-
-        //(Math.round(((Math.toDegrees(originalAzimuth.toDouble()) + 360.0) % 360.0).toDouble())).toInt()
-        val az2deg = originalAz2deg.value
-        Log.d(_TAG, "addPlaces: azimuth is <$originalAzimuth>, <$az2deg>")
+        originalAzimuth = compass!!.azimuth.value!!
+        originalAz2deg.value = (Math.round(((Math.toDegrees(originalAzimuth.toDouble()) + 360.0) % 360.0).toDouble())).toFloat()
+        Log.d(_TAG, "addPlaces: azimuth is <$originalAzimuth>, <${originalAz2deg.value}>")
 
         for (place in places) {
             val pathLength = place.getPathLength(currentLocation.latLng)

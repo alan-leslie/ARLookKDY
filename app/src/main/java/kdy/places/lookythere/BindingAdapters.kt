@@ -7,6 +7,9 @@ import androidx.databinding.BindingAdapter
 
 
 @BindingAdapter("current", "original", "adjustment")
-fun azimuthText(view: TextView, current: Int, original: Int, adjustment : Int) {
-    view.text = "Azimuth <$original($adjustment)>/<$current>"
+fun azimuthText(view: TextView, current: Float, original: Float, adjustment : Int) {
+    val cAsInt = current.toInt()
+    val oAsInt = original.toInt()
+
+    view.text = "Azimuth <$oAsInt($adjustment)>/<$cAsInt>"
 }

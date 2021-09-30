@@ -1,42 +1,25 @@
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 package kdy.places.lookythere.model
 
-import android.location.Location
 import com.google.android.gms.maps.model.LatLng
 import com.google.ar.sceneform.math.Vector3
-import com.google.maps.android.data.Geometry
 import com.google.maps.android.ktx.utils.sphericalHeading
 import com.google.maps.android.ktx.utils.sphericalPathLength
-import com.squareup.moshi.JsonClass
 import kotlin.math.cos
 import kotlin.math.sin
 
 /**
  * A model describing details about a Place (location, name, type, etc.).
  */
-@JsonClass(generateAdapter = true)
-data class Place(
+data class Peak(
     val place_id: String,
     val icon: String,
     val name: String,
     val geometry: kdy.places.lookythere.model.Geometry
 ) {
-    val _TAG = "Place"
+    val _TAG = "Peak"
 
     override fun equals(other: Any?): Boolean {
-        if (other !is Place) {
+        if (other !is Peak) {
             return false
         }
 
@@ -48,13 +31,13 @@ data class Place(
     }
 }
 
-fun Place.getPathLength(latLng: LatLng): Float {
+fun Peak.getPathLength(latLng: LatLng): Float {
     val placeLatLng = this.geometry.location.latLng
     val path: List<LatLng> = listOf(latLng, placeLatLng)
     return path.sphericalPathLength().toFloat()
 }
 
-fun Place.getPositionVector(azimuth: Float, latLng: LatLng): Vector3 {
+fun Peak.getPositionVector(azimuth: Float, latLng: LatLng): Vector3 {
     val placeLatLng = this.geometry.location.latLng
     val heading = latLng.sphericalHeading(placeLatLng)
     val heading2rad =  Math.toRadians(heading)
@@ -96,16 +79,4 @@ private fun calcRadius(pathLength: Float): Float
     }
 
     return 10.0f
-}
-
-data class Geometry(
-    val location: GeometryLocation
-)
-
-data class GeometryLocation(
-    val lat: Double,
-    val lng: Double
-) {
-    val latLng: LatLng
-        get() = LatLng(lat, lng)
 }

@@ -17,8 +17,8 @@ import kdy.places.lookythere.model.Bearing
 class OrientationSensor (context: Context) : SensorEventListener {
     val SENSOR_UNAVAILABLE = -1
 
-    private var _azimuth: MutableLiveData<Int> = MutableLiveData(90)
-    val azimuth : LiveData<Int> = _azimuth
+    private var _azimuth: MutableLiveData<Float> = MutableLiveData(0.0f)
+    val azimuth : LiveData<Float> = _azimuth
 
     // references to other objects
     private var sensorManager: SensorManager? = null
@@ -111,9 +111,9 @@ class OrientationSensor (context: Context) : SensorEventListener {
         }
 
         if (m_NormGravityVector != null && m_NormMagFieldValues != null) {
-            val azimuthBearing = calculateAzimuth(m_NormGravityVector!!, m_NormMagFieldValues!!)
-            azimuthBearing?.let{
-                _azimuth.value = (azimuthBearing.value).toInt()
+            val newAzimuth = calculateAzimuth(m_NormGravityVector!!, m_NormMagFieldValues!!)
+            newAzimuth?.let{
+                _azimuth.value = newAzimuth
             }
         }
         if (m_parent != null) m_parent!!.onSensorChanged(event)
@@ -128,7 +128,7 @@ class OrientationSensor (context: Context) : SensorEventListener {
         gravity: FloatArray,
         magneticField: FloatArray,
         checkMagnitude: Boolean = true
-    ): Bearing? {
+    ): Float? {
         val gravityVector = Vector3(gravity[0], gravity[1], gravity[2])
         val magneticFieldVector = Vector3(magneticField[0], magneticField[1], magneticField[2])
 
@@ -167,6 +167,7 @@ class OrientationSensor (context: Context) : SensorEventListener {
             return null
         }
 
-        return Bearing(Math.toDegrees(azimuth.toDouble()).toFloat())
+        return azimuth
+//        return Bearing(Math.toDegrees(azimuth.toDouble()).toFloat())
     }
 }
