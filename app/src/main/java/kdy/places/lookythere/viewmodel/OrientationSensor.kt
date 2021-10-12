@@ -160,14 +160,13 @@ class OrientationSensor (context: Context) : SensorEventListener {
         // NB: see https://math.stackexchange.com/questions/381649/whats-the-best-3d-angular-co-ordinate-system-for-working-with-smartfone-apps
         val sin = normEast.y - normNorth.x
         val cos = normEast.x + normNorth.y
-        val azimuth = if ((sin == 0f && cos == 0f)) 0f else atan2(sin, cos)
+        val newAzimuth = if ((sin == 0f && cos == 0f)) 0f else atan2(sin, cos)
         // if both are zero, should be invalid?
 
-        if (azimuth.isNaN()){
+        if (newAzimuth.isNaN()){
             return null
         }
 
-        return azimuth
-//        return Bearing(Math.toDegrees(azimuth.toDouble()).toFloat())
+        return newAzimuth
     }
 }

@@ -8,7 +8,7 @@ import androidx.databinding.BindingAdapter
 
 @BindingAdapter("current", "original", "adjustment")
 fun azimuthText(view: TextView, current: Float, original: Float, adjustment : Int) {
-    val cAsInt = current.toInt()
+    val cAsInt = Math.toDegrees(current.toDouble()).toInt()
     val oAsInt = original.toInt()
 
     view.text = "Azimuth <$oAsInt($adjustment)>/<$cAsInt>"
