@@ -30,7 +30,7 @@ class PlacesViewModel (private val repository: PlacesRepository) : ViewModel() {
 
 
     /**
-     * Gets places of specified type close to the location
+     * Gets places of specified type close to the location using google places API
      * [Place] [List] [LiveData].
      */
      fun getNearbyPlaces(location: Location) {
@@ -58,7 +58,7 @@ class PlacesViewModel (private val repository: PlacesRepository) : ViewModel() {
     }
 
     /**
-     * Gets places at NESW from the location
+     * Gets places two local bars plus point at 5km NESW from the location
      * [Place] [List] [LiveData].
      */
     fun getFixedPlaces(location: Location) {
@@ -96,7 +96,7 @@ class PlacesViewModel (private val repository: PlacesRepository) : ViewModel() {
     }
 
     /**
-     * Gets places at NESW from the location
+     * Gets places from DB, currently hills near Kirkcalsy
      * [Place] [List] [LiveData].
      */
     fun getDBPlaces() {

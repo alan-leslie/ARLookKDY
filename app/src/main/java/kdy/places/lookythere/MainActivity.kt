@@ -171,17 +171,18 @@ class MainActivity : AppCompatActivity() {
                 val anchor1 = hitResult.createAnchor()
                 val newp1 = anchor1.pose
                 val rot = newp1.rotationQuaternion
-//                val azimuth = orientationAngles[0]
-                val az2deg = compass!!.azimuth.value
+                val azimuth = compass!!.azimuth.value
+                val az2deg = Math.toDegrees(azimuth!!.toDouble())
 
                 val session: Session? = arFragment.arSceneView.session
                 val pos = floatArrayOf(0f, 0f, 0f)
-//                val rotation = floatArrayOf(0f, 1.00f, 0f, az2deg!!.toFloat())
                 val rotation = floatArrayOf(0f, 1.00f, 0f, az2deg!!.toFloat())
                 val anchor: Anchor = session!!.createAnchor(Pose(pos, rot))
                 val anchorLocalPosition = anchor.pose
                 val anchorLocalRotation = newp1.rotationQuaternion.component4()
+                val hitAanchorLocalPosition = anchor1.pose
 
+                Log.d(_TAG, "hitAanchorLocalPosition is <$hitAanchorLocalPosition>, anchorLocalRotation is <$anchorLocalRotation>")
                 Log.d(_TAG, "anchorLocalPosition is <$anchorLocalPosition>, anchorLocalRotation is <$anchorLocalRotation>")
 
                 anchorNode = AnchorNode(anchor)
@@ -383,7 +384,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun getNearbyPlaces(location: Location) {
-        placesViewModel.getFixedPlaces(location)
+        placesViewModel.getDBPlaces()
     }
 
     private fun isSupportedDevice(): Boolean {
